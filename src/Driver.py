@@ -13,7 +13,10 @@ from pyspark import SparkConf, SparkContext
 
 import Utility as ut
 
-import Degrees as deg
+from Configurations import Configurations
+
+from Degrees import Degrees
+from PageRank import PageRank
     
 # 
 # parse the raw data, rendering it to start with index 0
@@ -44,52 +47,6 @@ def map_make_col(line):
 
 
 
-# update through SGD
-def egoProperties_by_partition(iterator, broadcastD, broadcastTotal):
-    node_set = set()
-    node = 0
-#     H_set = set()
-
-    for ele in iterator:
-        node = ele[0]
-        (src, dst) = ele[1]
-        node_set.add(src)
-        node_set.add(dst)
-        
-        
-    results = []
-    
-    temp = []
-    for i in node_set:
-        temp.append(i)
-        
-    
-    srcs = [0] * broadcastTotal.value
-    dsts = [0] * broadcastTotal.value
-    all = [0] * broadcastTotal.value
-#     
-    for index, item in enumerate(broadcastD.value):
-
-        if item[0] in temp:
-            srcs[index] = 1
-        if item[1] in temp:
-            dsts[index] = 1
-#     print srcs
-#     print '-----------------------------'
-#     print dsts
-
-    for i in xrange(broadcastTotal.value):
-        all[i] = srcs[i] + dsts[i]
-    
-    edgeCount = all.count(2)
-        
-    
-    results.append(('ego_edge', node, edgeCount))  
-    results.append(('ego_size', node, len(node_set)))
-
- 
-    return results
-
 #########################################################################################
 
 if __name__ == '__main__':
@@ -112,62 +69,58 @@ if __name__ == '__main__':
     sc = pyspark.SparkContext(conf = sparkConf)
     
     # load data file with format:
-    # <user_id>,<movie_id>,<rating>
+    # <src>    <dst>
+    # remove all self loops and titles
     lines = sc.textFile(data_file_path)
     tempD = lines.map(lambda line: parse_raw_lines(line)).cache()
-    D = tempD.filter(lambda x: x[0] > 0).cache()
+    D = tempD.filter(lambda x: x[0] > 0 and x[0] != x[1]).cache()
     
     ut.printRDD(D)
 #     find the max value for user_id and movie_id
-    max_x_id, max_y_id = D.reduce(lambda x, y: (max(x[0], y[0]), max(x[1], y[1])))
-    print(max_x_id, max_y_id)
     
-    N = max(max_x_id, max_y_id)+1
+    graph_statistics = Configurations()
     
-    # initialize the outputs
-    Sizes = np.random.randint(2, size=(N-1, 1))
-    Edges = np.random.randint(2, size=(N-1, 1))
-    partition_list = []
+    '''
+    Degrees
+    '''
+    deg = Degrees()
     
-    for i in xrange(initialID, N):
-#
-        partition = D.filter(lambda x: i in x).map(lambda x: (i, x)).cache()
-#         printRDD(partition)    
-        partition_list.append(partition)
-#         print i
-    
-    broadcastD = sc.broadcast(D.collect())
-    broadcastTotal = sc.broadcast(D.count())
-    
-    counter = 0
-    # iterate through all nodes for per-node local property
-    for partition in partition_list:
+    if graph_statistics.getIndeg():
+        output_rdd = deg.statistics_compute(D, 'out')
         
-        counter = counter + 1
-        print(counter)
-        results = partition.mapPartitions(lambda x: egoProperties_by_partition(x, broadcastD, broadcastTotal)).collect()       
-
-        # find all properties 
-        for ele in results:
-            if ele[0] == 'ego_size':
-#                 print ele[1], ele[2]
-                Sizes[ele[1]-initialID] = ele[2]
-            elif ele[0] == 'ego_edge':
-                Edges[ele[1]-initialID] = ele[2]
-                
-
-                     
-#     print Sizes
-#     print '======================='
-#     print Edges
+        # generate outputs to hdfs
+        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp.saveAsTextFile(output_file_path+'out_degree')
+        
+    if graph_statistics.getOutdeg():
+        output_rdd = deg.statistics_compute(D, 'in')
+        
+        # generate outputs to hdfs
+        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp.saveAsTextFile(output_file_path+'in_degree')
+        
+    if graph_statistics.getTotaldge():
+        output_rdd = deg.statistics_compute(D, 'total')
+        
+        # generate outputs to hdfs
+        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp.saveAsTextFile(output_file_path+'total_degree')
+        
+    '''
+    PageRank
+    '''
+    pr = PageRank()
+    
+    if graph_statistics.getIndeg():
+        output_rdd = pr.statistics_compute(D, 'out')
+        
+        # generate outputs to hdfs
+        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp.saveAsTextFile(output_file_path+'out_degree')
    
 #          
-    # generate sizes to hdfs
-    Sizes_rdd = sc.parallelize(Sizes)
-#     printRDD(W_rdd)
-    temp = Sizes_rdd.map(lambda x: ",".join(map(str,x))).coalesce(1)
-    temp.saveAsTextFile(output_file_path+'sizes')
+    
 #      
-    Edges_rdd = sc.parallelize(Edges)
-    temp = Edges_rdd.map(lambda x: ",".join(map(str,x))).coalesce(1)
-    temp.saveAsTextFile(output_file_path+'edges')
+#     Edges_rdd = sc.parallelize(Edges)
+#     temp = Edges_rdd.map(lambda x: ",".join(map(str,x))).coalesce(1)
+#     temp.saveAsTextFile(output_file_path+'edges')
