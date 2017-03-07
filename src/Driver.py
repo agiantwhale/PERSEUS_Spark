@@ -60,22 +60,40 @@ if __name__ == '__main__':
     
     # default settings
     initialID = 1
-
-    # setting up spark
-    os.environ["SPARK_HOME"] = "/Users/DiJin/BigData/spark-1.6.0-bin-hadoop2.6"    # <<<---
-    # configure the Spark environment
-    sparkConf = pyspark.SparkConf().setAppName("PERSEUS_Spark")\
-    .setMaster("local")                                                            # <<<---
-    sc = pyspark.SparkContext(conf = sparkConf)
     
-    # load data file with format:
-    # <src>    <dst>
-    # remove all self loops and titles
+    mod = 'local'
+    
+    # setting up spark
+    
+    if mod == 'local':
+        os.environ["SPARK_HOME"] = "/Users/DiJin/BigData/spark-1.6.0-bin-hadoop2.6"
+        # configure the Spark environment
+        sparkConf = pyspark.SparkConf().setAppName("PERSEUS_Spark")\
+        .setMaster("local")
+
+    elif mod == 'yarn':
+        os.environ['PYSPARK_PYTHON'] = '/sw/lsa/centos7/python-anaconda2/201607/bin/python'
+        sparkConf = pyspark.SparkConf().setMaster("yarn-client").setAppName("LP")
+        sparkConf.set("spark.executor.heartbeatInterval","3600s")
+    #     .setMaster("local")                                                            # <<<---
+        
+    else:
+        sys.exit('mode error: only local and yarn are accepted.')
+    
+    
+    sc = pyspark.SparkContext(conf = sparkConf)
+    '''
+    assume the nodes in the input are re-ordered and no duplication
+    
+    load data file with format:
+    <src>    <dst>
+    remove all self loops and titles
+    '''
     lines = sc.textFile(data_file_path)
     tempD = lines.map(lambda line: parse_raw_lines(line)).cache()
     D = tempD.filter(lambda x: x[0] > 0 and x[0] != x[1]).cache()
     
-    ut.printRDD(D)
+#     ut.printRDD(D)
 #     find the max value for user_id and movie_id
     
     graph_statistics = Configurations()
@@ -89,21 +107,21 @@ if __name__ == '__main__':
         output_rdd = deg.statistics_compute(D, 'out')
         
         # generate outputs to hdfs
-        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp = output_rdd.map(ut.toTSVLine).coalesce(1)
         temp.saveAsTextFile(output_file_path+'out_degree')
         
     if graph_statistics.getOutdeg():
         output_rdd = deg.statistics_compute(D, 'in')
         
         # generate outputs to hdfs
-        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp = output_rdd.map(ut.toTSVLine).coalesce(1)
         temp.saveAsTextFile(output_file_path+'in_degree')
         
     if graph_statistics.getTotaldge():
         output_rdd = deg.statistics_compute(D, 'total')
         
         # generate outputs to hdfs
-        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
+        temp = output_rdd.map(ut.toTSVLine).coalesce(1)
         temp.saveAsTextFile(output_file_path+'total_degree')
         
     '''
@@ -111,12 +129,12 @@ if __name__ == '__main__':
     '''
     pr = PageRank()
     
-    if graph_statistics.getIndeg():
-        output_rdd = pr.statistics_compute(D, 'out')
+    if graph_statistics.getPR():
+        output_rdd = pr.statistics_compute(D, 32, 0.85)
         
         # generate outputs to hdfs
-        temp = output_rdd.map(lambda x: "\t".join(map(str,x))).coalesce(1)
-        temp.saveAsTextFile(output_file_path+'out_degree')
+        temp = output_rdd.map(ut.toTSVLine).coalesce(1)
+        temp.saveAsTextFile(output_file_path+'pagerank')
    
 #          
     

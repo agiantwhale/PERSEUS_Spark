@@ -43,11 +43,24 @@ def map_make_col(line):
 def printRDD(input):
 #     fOut = open (outputFilePath, 'aw')
     for ele in input.collect():
-        print (ele)
+        print(ele)
 #         fOut.write(str(ele) + '\n')
     print ("-------------------------")
 
-# 
+# print all the elements in an RDD
+def printRDDList(input):
+#     fOut = open (outputFilePath, 'aw')
+    temp = input.map(lambda x: (x[0], list(x[1]))).collect()
+    for ele in temp:
+        print(ele)
+#         fOut.write(str(ele) + '\n')
+    print ("-------------------------")
+
+def toCSVLine(data):
+  return ','.join(str(d) for d in data)
+
+def toTSVLine(data):
+  return '\t'.join(str(d) for d in data)
 
 
 # update through SGD
