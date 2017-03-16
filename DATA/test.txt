@@ -1,0 +1,14 @@
+# Directed graph (each unordered pair of nodes is saved once): Cit-HepTh.txt 
+# Paper citation network of Arxiv High Energy Physics Theory category
+# Nodes: 27770 Edges: 352807
+# FromNodeId	ToNodeId
+2	1
+2	3
+2	5
+2	6
+3	1
+3	4
+3	6
+4	2
+5	3
+3	3
