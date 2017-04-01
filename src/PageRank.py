@@ -27,25 +27,71 @@ class PageRank:
             num_urls = len(urls)
             for url in urls:
                 yield (url, rank / num_urls)
+
+                
+    def computeContribs_weighted(self, urls_w, rank):
+        """Calculates URL contributions to the rank of other URLs."""
+
+        if urls_w is not None:
+            num_urls = len(urls_w)
+            temp_sum = 0
+            temp  = [(ele[0], ele[1] / num_urls) for ele in urls_w]
+            for ele in temp:
+                temp_sum = temp_sum + ele[1]
+
+            for url in temp:
+                yield (url[0], url[1] * rank / temp_sum)
         
-    def statistics_compute(self, D, Iter, d):
+    def statistics_compute(self, D, Iter, d, debug_mod):
         max_src, max_dst = D.reduce(lambda x, y: (max(x[0], y[0]), max(x[1], y[1])))
         print(max_src, max_dst)
         
         N = float(max(max_src, max_dst))
         
         ranks = D.map(lambda line: line[0]).union(D.map(lambda line: line[1])).distinct().map(lambda line: (line, 1/N)).cache()
-        ut.printRDD(ranks)
+        
         for iter in xrange(Iter):
-            print(iter)
-            contribs = D.groupByKey().rightOuterJoin(ranks).flatMap(
-            lambda url_urls_rank: self.computeContribs(url_urls_rank[1][0], url_urls_rank[1][1])
-            )
-#             ut.printRDD(contribs)
+            if debug_mod == 1:
+                print(iter)
+                ut.printRDD(D)
+            contribs = D.groupByKey().join(ranks).flatMap( lambda url_urls_rank: self.computeContribs(url_urls_rank[1][0], url_urls_rank[1][1]) )
+            
+            if debug_mod == 1:
+                ut.printRDD(contribs)
+                
             ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * d + (1-d)/N)
-#             ut.printRDD(ranks)
+#             ranks = ranks.leftOuterJoin(ranks_u).map(lambda line: (line[0], line[1][0] if line[1][1] is None else line[1][1]))
+            
+            if debug_mod == 1:
+                ut.printRDD(ranks)
         return ranks
 #         for (link, rank) in ranks.collect():
 #             print("%s has rank: %s." % (link, rank))
+
+    def statistics_compute_weighted(self, D, Iter, d, debug_mod):
+        max_src, max_dst = D.reduce(lambda x, y: (max(x[0], y[0]), max(x[1], y[1])))
+        print(max_src, max_dst)
+        
+        N = float(max(max_src, max_dst))
+        
+        ranks = D.map(lambda line: line[0]).union(D.map(lambda line: line[1])).distinct().map(lambda line: (line, 1/N)).cache()
+        
+        D = D.map(lambda x: (x[0], (x[1], x[2])));
+        
+        for iter in xrange(Iter):
+            if debug_mod == 1:
+                print(iter)
+                ut.printRDD(D)
+            contribs = D.groupByKey().join(ranks).flatMap( lambda url_urls_rank: self.computeContribs_weighted(url_urls_rank[1][0], url_urls_rank[1][1]) )
+            
+            if debug_mod == 1:
+                ut.printRDD(contribs)
+                
+            ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * d + (1-d)/N)
+#             ranks = ranks.leftOuterJoin(ranks_u).map(lambda line: (line[0], line[1][0] if line[1][1] is None else line[1][1]))
+            
+            if debug_mod == 1:
+                ut.printRDD(ranks)
+        return ranks
         
         
