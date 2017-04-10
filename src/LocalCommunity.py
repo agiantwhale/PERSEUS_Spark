@@ -4,11 +4,7 @@ Created on April 9, 2017
 @author: Il Jae Lee (iljae@umich.edu)
 '''
 
-import sys
 from operator import add
-
-def println(x):
-    print x
 
 class LocalCommunity:
 
