@@ -69,7 +69,6 @@ class LocalCommunity:
 
         # nodes it's possible for second index in
         # rdd to reach in 2 edges
-        lc_rdd.join(D_w).foreach(println)
         neighbors_rdd = lc_rdd.join(D_w).map(lambda r: ((r[1][0], r[1][1][0]), r[1][1][1]))
 
         # (neighbors - local community) to get rid of nodes that are in lc
